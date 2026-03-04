@@ -1,0 +1,29 @@
+okay
+here we go
+this file I will write out  my ideas for this project
+
+basically the idea is I want to create a creature simulation
+simple enough idea.
+
+the creatures stats are printed or visually represented somewhere on the screen
+and then the player needs to do things to take care of the creature
+the creature will need food, I dont know what else hoenstly
+maybe water
+
+and the player will be able to choose from different buttons at the bottom of the screen
+what they want to drop on the screen to give the creature.
+then the creature will go to either the food or water depending on which is more urgent
+and eat or drink
+
+so i need to make a food/item class
+and then make two different kinds maybe for food and water
+I cant make this too difficult to program this cant be somewhere
+huge all consuming project right now I just need to learn how this shit works
+but basically the creature will have a brain function called all of the time and 
+the creature will go towards the food or water
+it will also have a movement function that it will use to get to the food
+and maybe a pathfinding function idk
+
+and the screen will be drawn in main and then maybe a function to handle 
+user input, which is bascially just the user clicking on the screen
+
