@@ -50,7 +50,7 @@ from creature import Creature
 creatures = []
 
 selected_creature = None
-panel_rect = pygame.Rect(20, 500, 250, 100)
+panel_rect = pygame.Rect(20, 480, 250, 130)
 close_button_rect = pygame.Rect(panel_rect.right - 25, panel_rect.y + 5, 20, 20)
 
 mode = "food"
@@ -300,6 +300,39 @@ while running:
         for i, line in enumerate(stats):
             stat_text = font.render(line, True, (0,0,0))
             screen.blit(stat_text, (panel_rect.x + 10, panel_rect.y + 10 + i*18))
+
+        #hunger bar visualization
+        bar_x = panel_rect.x + 80
+        bar_y = panel_rect.y + panel_rect.height - 25
+        bar_width = 120
+        bar_height = 12
+
+        hunger_label = font.render("Hunger", True, (0,0,0))
+        screen.blit(hunger_label, (panel_rect.x + 10, bar_y - 2))
+
+        #draw background bar
+        pygame.draw.rect(screen, (180,180,180), (bar_x, bar_y, bar_width, bar_height))
+
+        #if creature is satiated show blue bar and SATIATED text
+        if hasattr(selected_creature, "satiated_timer") and selected_creature.satiated_timer > 0:
+            pygame.draw.rect(screen, (20,70,180), (bar_x, bar_y, bar_width, bar_height))
+
+            small_font = pygame.font.SysFont(None, 18)
+            satiated_text = small_font.render("SATIATED", True, (255,255,255))
+            text_rect = satiated_text.get_rect(center=(bar_x + bar_width/2, bar_y + bar_height/2))
+            screen.blit(satiated_text, text_rect)
+
+        else:
+            #0 = full, 200 = starvation
+            hunger_ratio = min(max(selected_creature.food_need / 200, 0), 1)
+
+            #calculate gradient color
+            r = int(255 * hunger_ratio)
+            g = int(255 * (1 - hunger_ratio))
+            bar_color = (r, g, 0)
+
+            #draw filled portion
+            pygame.draw.rect(screen, bar_color, (bar_x, bar_y, int(bar_width * hunger_ratio), bar_height))
 
     #speed buttons
     if speed_mode == "slow":

@@ -27,3 +27,5 @@ and maybe a pathfinding function idk
 and the screen will be drawn in main and then maybe a function to handle 
 user input, which is bascially just the user clicking on the screen
 
+notes March 4th 2026
+next session make a cool down for reproduction
