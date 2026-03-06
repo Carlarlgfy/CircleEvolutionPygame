@@ -138,6 +138,14 @@ while running:
                 elif mode == "creature":
                     new_creature = Creature(event.pos)
                     new_creature.birth_day = day
+
+                    #mark the first creature ever created as Adam
+                    if len(creatures) == 0:
+                        new_creature.adam_line = True
+                        new_creature.is_adam = True
+                    else:
+                        new_creature.is_adam = False
+
                     creatures.append(new_creature)
                 elif mode == "kill":
                     # only kill if NOT clicking on any UI button
@@ -278,13 +286,38 @@ while running:
 
     #selected creature info panel
     if selected_creature and selected_creature in creatures:
-        pygame.draw.rect(screen, (220, 220, 220), panel_rect)
-        pygame.draw.rect(screen, (0, 0, 0), panel_rect, 2)
+
+        #create a working panel rectangle so we can modify size for Adam lineage
+        active_panel = panel_rect.copy()
+
+        if hasattr(selected_creature, "adam_line") and selected_creature.adam_line:
+            active_panel.height += 20
+            active_panel.y -= 2
+
+        pygame.draw.rect(screen, (220, 220, 220), active_panel)
+        pygame.draw.rect(screen, (0, 0, 0), active_panel, 2)
 
         #close button
-        pygame.draw.rect(screen, (180, 50, 50), close_button_rect)
+        close_rect = pygame.Rect(active_panel.right - 25, active_panel.y + 5, 20, 20)
+        pygame.draw.rect(screen, (180, 50, 50), close_rect)
         x_text = font.render("X", True, (255,255,255))
-        screen.blit(x_text, (close_button_rect.x + 5, close_button_rect.y + 2))
+        screen.blit(x_text, (close_rect.x + 5, close_rect.y + 2))
+
+        # Adam lineage header
+        header_offset = 0
+
+        if hasattr(selected_creature, "adam_line") and selected_creature.adam_line:
+
+            #only the first initialized creature is Adam
+            if hasattr(selected_creature, "is_adam") and selected_creature.is_adam:
+                label = "ADAM"
+            else:
+                label = "Descendant of Adam"
+            header_text = font.render(label, True, (0,0,0))
+            screen.blit(header_text, (active_panel.x + 28, active_panel.y + 8))
+            #draw red blood drop indicator
+            pygame.draw.circle(screen, (180,0,0), (active_panel.x + 15, active_panel.y + 16), 5)
+            header_offset = 20
 
         #stat lines
         age_days = selected_creature.get_age_days(day)
@@ -299,16 +332,16 @@ while running:
 
         for i, line in enumerate(stats):
             stat_text = font.render(line, True, (0,0,0))
-            screen.blit(stat_text, (panel_rect.x + 10, panel_rect.y + 10 + i*18))
+            screen.blit(stat_text, (active_panel.x + 10, active_panel.y + 10 + header_offset + i*18))
 
         #hunger bar visualization
-        bar_x = panel_rect.x + 80
-        bar_y = panel_rect.y + panel_rect.height - 25
+        bar_x = active_panel.x + 80
+        bar_y = active_panel.y + active_panel.height - 25
         bar_width = 120
         bar_height = 12
 
         hunger_label = font.render("Hunger", True, (0,0,0))
-        screen.blit(hunger_label, (panel_rect.x + 10, bar_y - 2))
+        screen.blit(hunger_label, (active_panel.x + 10, bar_y - 2))
 
         #draw background bar
         pygame.draw.rect(screen, (180,180,180), (bar_x, bar_y, bar_width, bar_height))

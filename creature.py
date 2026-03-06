@@ -15,6 +15,7 @@ class Creature:
             self.lifespan = genes["lifespan"]
             self.maturation_time = genes["maturation_time"]
             self.hunger_limit = genes["hunger_limit"]
+            self.adam_line = genes.get("adam_line", False)
         else:
             self.mature_size = random.randint(12, 25)
 
@@ -48,6 +49,10 @@ class Creature:
             base_hunger = random.randint(130, 200)
             speed_penalty = int(self.speed * 10)
             self.hunger_limit = max(100, base_hunger - speed_penalty)
+
+            #lineage marker
+            #used to track descendants of the first creature (Adam)
+            self.adam_line = False
 
         #juvenile phase initialization
         #start between 1/4 and 1/2 of mature size
@@ -371,6 +376,7 @@ class Creature:
             "lifespan": max(600, min(new_lifespan, 2000)),
             "maturation_time": max(150, min(new_maturation_time, 800)),
             "hunger_limit": new_hunger,
+            "adam_line": self.adam_line or partner.adam_line,
         }
 
         child = Creature((self.x, self.y), genes)

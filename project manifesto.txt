@@ -29,3 +29,7 @@ user input, which is bascially just the user clicking on the screen
 
 notes March 4th 2026
 next session make a cool down for reproduction
+
+how to visualize genetic trends in the population over time
+how to save and load simulation worlds
+how to add mutation pressure and environmental events
