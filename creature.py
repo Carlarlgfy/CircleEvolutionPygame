@@ -15,6 +15,7 @@ class Creature:
             self.lifespan = genes["lifespan"]
             self.maturation_time = genes["maturation_time"]
             self.hunger_limit = genes["hunger_limit"]
+            self.energy = genes.get("energy", 1.0)
             self.adam_line = genes.get("adam_line", False)
         else:
             self.mature_size = random.randint(12, 25)
@@ -49,6 +50,10 @@ class Creature:
             base_hunger = random.randint(130, 200)
             speed_penalty = int(self.speed * 10)
             self.hunger_limit = max(100, base_hunger - speed_penalty)
+
+            #energy efficiency trait
+            #higher energy means creature handles hunger slowdown better
+            self.energy = random.uniform(0.8, 1.3)
 
             #lineage marker
             #used to track descendants of the first creature (Adam)
@@ -212,8 +217,15 @@ class Creature:
     def move(self):
         #movement update
         #creature moves smoothly every frame
-        self.x += self.speed * math.cos(math.radians(self.direction))
-        self.y += self.speed * math.sin(math.radians(self.direction))
+        #hunger affects movement efficiency
+        #energy trait buffers slowdown from hunger
+        hunger_ratio = self.food_need / self.hunger_limit
+        slowdown = min(hunger_ratio * (1.2 - self.energy), 0.75)
+
+        effective_speed = self.speed * (1 - slowdown)
+
+        self.x += effective_speed * math.cos(math.radians(self.direction))
+        self.y += effective_speed * math.sin(math.radians(self.direction))
 
         #wall collision handling
         #if creature hits boundary it rotates away instead of sticking
@@ -376,6 +388,7 @@ class Creature:
             "lifespan": max(600, min(new_lifespan, 2000)),
             "maturation_time": max(150, min(new_maturation_time, 800)),
             "hunger_limit": new_hunger,
+            "energy": max(0.6, min((self.energy + partner.energy)/2 + random.uniform(-0.05,0.05), 1.5)),
             "adam_line": self.adam_line or partner.adam_line,
         }
 
