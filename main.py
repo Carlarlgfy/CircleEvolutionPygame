@@ -86,17 +86,31 @@ running = True
 game_state = "menu"
 
 #menu buttons
+
 menu_new_rect = pygame.Rect(310, 220, 200, 50)
 menu_load_rect = pygame.Rect(310, 290, 200, 50)
 menu_quit_rect = pygame.Rect(310, 360, 200, 50)
+
+#mode select buttons
+mode_select_adam_rect = pygame.Rect(300, 230, 220, 50)
+mode_select_free_rect = pygame.Rect(300, 300, 220, 50)
+back_mode_rect = pygame.Rect(340, 380, 140, 40)
 
 #new game setup UI
 name_input_rect = pygame.Rect(300, 260, 220, 40)
 start_game_rect = pygame.Rect(300, 320, 220, 45)
 back_newgame_rect = pygame.Rect(340, 390, 140, 40)
 
+
 world_name = ""
 name_input_active = False
+
+#game mode system
+#determines special rule behavior
+
+game_mode = None  # "adam" or "free"
+adam_initialized = False
+game_over = False
 
 #notification popup system
 notification_text = ""
@@ -200,6 +214,7 @@ while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             running = False
+
         # Menu click handling
         if event.type == pygame.MOUSEBUTTONDOWN and game_state == "menu":
             if menu_new_rect.collidepoint(event.pos):
@@ -207,11 +222,22 @@ while running:
                     notification_text = "No empty save slots"
                     notification_timer = 3000
                 else:
-                    game_state = "new_game"
+                    game_state = "mode_select"
             elif menu_load_rect.collidepoint(event.pos):
                 game_state = "load_menu"
             elif menu_quit_rect.collidepoint(event.pos):
                 running = False
+
+        #mode selection click handling
+        if event.type == pygame.MOUSEBUTTONDOWN and game_state == "mode_select":
+            if mode_select_adam_rect.collidepoint(event.pos):
+                game_mode = "adam"
+                game_state = "new_game"
+            elif mode_select_free_rect.collidepoint(event.pos):
+                game_mode = "free"
+                game_state = "new_game"
+            elif back_mode_rect.collidepoint(event.pos):
+                game_state = "menu"
 
         #load menu click handling
         if event.type == pygame.MOUSEBUTTONDOWN and game_state == "load_menu":
@@ -234,6 +260,16 @@ while running:
                     load_world(2)
                     game_state = "simulation"
 
+        #adam game over click handling
+        if event.type == pygame.MOUSEBUTTONDOWN and game_state == "adam_game_over":
+
+            if back_button_rect.collidepoint(event.pos):
+                creatures.clear()
+                foods.clear()
+                game_over = False
+                adam_initialized = False
+                game_state = "menu"
+
         #new game menu click handling
         if event.type == pygame.MOUSEBUTTONDOWN and game_state == "new_game":
             if name_input_rect.collidepoint(event.pos):
@@ -249,7 +285,7 @@ while running:
                     notification_text = "World name already exists"
                     notification_timer = 3000
                 else:
-                    game_state = "simulation"
+                    game_state = "mode_select"
 
             if back_newgame_rect.collidepoint(event.pos):
                 game_state = "menu"
@@ -313,6 +349,7 @@ while running:
                     if len(creatures) == 0:
                         new_creature.adam_line = True
                         new_creature.is_adam = True
+                        adam_initialized = True
                     else:
                         new_creature.is_adam = False
 
@@ -338,6 +375,30 @@ while running:
                 world_name = world_name[:-1]
             elif len(world_name) < 20:
                 world_name += event.unicode
+
+    #================ MODE SELECT MENU =================
+    if game_state == "mode_select":
+
+        screen.fill((255,255,255))
+
+        title_font = pygame.font.SysFont(None, 48)
+        title = title_font.render("Choose Game Mode", True, (0,0,0))
+        screen.blit(title, (280,150))
+
+        pygame.draw.rect(screen,(200,200,200),mode_select_adam_rect)
+        pygame.draw.rect(screen,(200,200,200),mode_select_free_rect)
+        pygame.draw.rect(screen,(180,180,180),back_mode_rect)
+
+        adam_text = font.render("Adam Mode",True,(0,0,0))
+        free_text = font.render("Free Play",True,(0,0,0))
+        back_text = font.render("Back",True,(0,0,0))
+
+        screen.blit(adam_text,(mode_select_adam_rect.x+70,mode_select_adam_rect.y+15))
+        screen.blit(free_text,(mode_select_free_rect.x+75,mode_select_free_rect.y+15))
+        screen.blit(back_text,(back_mode_rect.x+45,back_mode_rect.y+10))
+
+        pygame.display.flip()
+        continue
 
     #================ MENU SCREEN =================
     if game_state == "menu":
@@ -427,6 +488,28 @@ while running:
         screen.blit(slot3_text, (slot3_rect.x + 60, slot3_rect.y + 15))
 
         screen.blit(back_text, (back_button_rect.x + 45, back_button_rect.y + 10))
+
+        pygame.display.flip()
+        continue
+
+    #================ ADAM MODE GAME OVER =================
+    if game_state == "adam_game_over":
+
+        screen.fill((255,255,255))
+
+        big_font = pygame.font.SysFont(None,60)
+
+        line1 = big_font.render("Adam and Adam's descendants",True,(0,0,0))
+        line2 = big_font.render("have died.",True,(0,0,0))
+        line3 = big_font.render("GAME OVER",True,(0,0,0))
+
+        screen.blit(line1,(180,200))
+        screen.blit(line2,(340,270))
+        screen.blit(line3,(320,340))
+
+        pygame.draw.rect(screen,(200,200,200),back_button_rect)
+        back_text = font.render("Main Menu",True,(0,0,0))
+        screen.blit(back_text,(back_button_rect.x+25,back_button_rect.y+10))
 
         pygame.display.flip()
         continue
@@ -532,6 +615,13 @@ while running:
         for child in new_creatures:
             child.birth_day = day
             creatures.append(child)
+
+        #adam mode extinction rule
+        if game_mode == "adam" and adam_initialized and not game_over:
+            adam_alive = any(c.adam_line and c.alive for c in creatures)
+            if not adam_alive:
+                game_over = True
+                game_state = "adam_game_over"
 
         step_timer = 0
 
