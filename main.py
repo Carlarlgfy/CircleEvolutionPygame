@@ -223,6 +223,7 @@ while running:
                     notification_timer = 3000
                 else:
                     game_state = "mode_select"
+                    continue
             elif menu_load_rect.collidepoint(event.pos):
                 game_state = "load_menu"
             elif menu_quit_rect.collidepoint(event.pos):
@@ -233,11 +234,14 @@ while running:
             if mode_select_adam_rect.collidepoint(event.pos):
                 game_mode = "adam"
                 game_state = "new_game"
+                continue
             elif mode_select_free_rect.collidepoint(event.pos):
                 game_mode = "free"
                 game_state = "new_game"
+                continue
             elif back_mode_rect.collidepoint(event.pos):
                 game_state = "menu"
+                continue
 
         #load menu click handling
         if event.type == pygame.MOUSEBUTTONDOWN and game_state == "load_menu":
@@ -285,7 +289,7 @@ while running:
                     notification_text = "World name already exists"
                     notification_timer = 3000
                 else:
-                    game_state = "mode_select"
+                    game_state = "simulation"
 
             if back_newgame_rect.collidepoint(event.pos):
                 game_state = "menu"
@@ -689,6 +693,7 @@ while running:
 
         stats = [
             f"Size: {round(selected_creature.mature_size,1)}",
+            f"Generation: {selected_creature.generation}",
             f"Speed: {round(selected_creature.speed,2)}",
             f"Awareness: {round(selected_creature.awareness_radius,1)}",
             f"Maturation: {selected_creature.maturation_time}",

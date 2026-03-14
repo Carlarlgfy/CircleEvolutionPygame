@@ -55,9 +55,13 @@ class Creature:
             #higher energy means creature handles hunger slowdown better
             self.energy = random.uniform(0.8, 1.3)
 
-            #lineage marker
-            #used to track descendants of the first creature (Adam)
-            self.adam_line = False
+        #lineage marker
+        #used to track descendants of the first creature (Adam)
+        self.adam_line = False
+
+        #generation tracking
+        #Adam or first generation creatures start at generation 1
+        self.generation = 1
 
         #juvenile phase initialization
         #start between 1/4 and 1/2 of mature size
@@ -393,6 +397,11 @@ class Creature:
         }
 
         child = Creature((self.x, self.y), genes)
+
+        #generation inheritance
+        #child generation is one greater than the older parent
+        child.generation = max(self.generation, partner.generation) + 1
+
         return child
 
     #returns age in world days
