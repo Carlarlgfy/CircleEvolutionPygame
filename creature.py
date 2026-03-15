@@ -57,7 +57,9 @@ class Creature:
 
         #lineage marker
         #used to track descendants of the first creature (Adam)
-        self.adam_line = False
+        #only set default if it was not inherited from genes
+        if not hasattr(self, "adam_line"):
+            self.adam_line = False
 
         #generation tracking
         #Adam or first generation creatures start at generation 1

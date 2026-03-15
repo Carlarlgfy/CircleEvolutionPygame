@@ -14,6 +14,8 @@ step_timer = 0
 
 step_interval = 1000  # milliseconds (1 second world step)
 
+paused = False  # global simulation pause state
+
 #day counter system
 #tracks passing simulation days
 day = 1
@@ -30,6 +32,7 @@ margin = 20
 fast_button_rect = pygame.Rect(800 - margin - 70, 20, 70, 30)
 normal_button_rect = pygame.Rect(fast_button_rect.x - 10 - 80, 20, 80, 30)
 slow_button_rect = pygame.Rect(normal_button_rect.x - 10 - 60, 20, 60, 30)
+pause_button_rect = pygame.Rect(slow_button_rect.x - 10 - 80, 20, 80, 30)
 
 #need to figure out how to intiialize time and how that
 #will impact the creatures needs and food creation as well
@@ -52,7 +55,7 @@ from creature import Creature
 creatures = []
 
 selected_creature = None
-panel_rect = pygame.Rect(20, 480, 250, 130)
+panel_rect = pygame.Rect(10, 440, 250, 160)
 close_button_rect = pygame.Rect(panel_rect.right - 25, panel_rect.y + 5, 20, 20)
 
 mode = "food"
@@ -135,8 +138,12 @@ slot2_rect = pygame.Rect(300, 270, 220, 50)
 slot3_rect = pygame.Rect(300, 340, 220, 50)
 back_button_rect = pygame.Rect(340, 430, 140, 40)
 
+delete_button_rect = pygame.Rect(540, 430, 120, 40)
+delete_mode = False
+
 #================ SAVE SYSTEM =================
 SAVE_FILES = ["save_slot1.json", "save_slot2.json", "save_slot3.json"]
+current_save_slot = None  # tracks which slot the current world belongs to
 
 def get_empty_slot():
     for i, f in enumerate(SAVE_FILES):
@@ -145,22 +152,44 @@ def get_empty_slot():
     return None
 
 def save_world():
-    slot = get_empty_slot()
-    if slot is None:
-        return
+    global current_save_slot
+
+    # If this world already belongs to a slot, overwrite it
+    if current_save_slot is not None:
+        slot = current_save_slot
+    else:
+        slot = get_empty_slot()
+        if slot is None:
+            return
+        # remember the slot for future saves
+        current_save_slot = slot
 
     data = {
         "world_name": world_name,
+        "game_mode": game_mode,
         "day": day,
+        "adam_initialized": adam_initialized,
+        "autofeed": autofeed,
+        "autofeed_level": autofeed_level,
         "creatures": [
             {
                 "x": c.x,
                 "y": c.y,
-                "size": c.mature_size,
-                "speed": c.speed,
-                "awareness": c.awareness_radius,
-                "maturation": c.maturation_time,
-                "food_need": c.food_need
+                "size": getattr(c, "size", c.mature_size),
+                "genes": {
+                    "mature_size": c.mature_size,
+                    "color": c.color,
+                    "speed": c.speed,
+                    "awareness": c.awareness_radius,
+                    "maturation_time": c.maturation_time,
+                    "hunger_limit": getattr(c, "hunger_limit", c.food_need),
+                    "energy": c.energy,
+                    "lifespan": getattr(c, "lifespan", None),
+                    "adam_line": getattr(c, "adam_line", False)
+                },
+                "generation": getattr(c, "generation", 1),
+                "is_adam": getattr(c, "is_adam", False),
+                "birth_day": getattr(c, "birth_day", 1)
             }
             for c in creatures
         ],
@@ -176,7 +205,7 @@ def save_world():
 
 # Load world from slot
 def load_world(slot_index):
-    global creatures, foods, world_name, day
+    global creatures, foods, world_name, day, game_mode, adam_initialized, autofeed, autofeed_level, game_over, selected_creature, current_save_slot
 
     file = SAVE_FILES[slot_index]
 
@@ -185,21 +214,36 @@ def load_world(slot_index):
 
     with open(file, "r") as f:
         data = json.load(f)
+    current_save_slot = slot_index  # remember which slot this world came from
 
     world_name = data.get("world_name", "World")
+    game_mode = data.get("game_mode", "free")
+    adam_initialized = data.get("adam_initialized", False)
+    autofeed = data.get("autofeed", False)
+    autofeed_level = data.get("autofeed_level", 5)
     day = data.get("day", 1)
+
+    #reset runtime state when loading
+    game_over = False
+    selected_creature = None
 
     creatures = []
     foods = []
 
     for c in data.get("creatures", []):
-        creature = Creature((c["x"], c["y"]))
-        creature.mature_size = c.get("size", creature.mature_size)
-        creature.speed = c.get("speed", creature.speed)
-        creature.awareness_radius = c.get("awareness", creature.awareness_radius)
-        creature.maturation_time = c.get("maturation", creature.maturation_time)
-        creature.food_need = c.get("food_need", creature.food_need)
+        genes = c.get("genes", {})
+        creature = Creature((c["x"], c["y"]), genes)
+        creature.generation = c.get("generation", 1)
+        creature.is_adam = c.get("is_adam", False)
+        creature.birth_day = c.get("birth_day", day)
+        # restore current growth stage
+        if "size" in c:
+            creature.size = c["size"]
         creatures.append(creature)
+
+    #ensure Adam lineage state is consistent after loading
+    if game_mode == "adam":
+        adam_initialized = any(c.adam_line for c in creatures)
 
     for fdata in data.get("foods", []):
         foods.append(Food((fdata["x"], fdata["y"])))
@@ -222,6 +266,7 @@ while running:
                     notification_text = "No empty save slots"
                     notification_timer = 3000
                 else:
+                    current_save_slot = None  # ensure a new world does not reuse an old save slot
                     game_state = "mode_select"
                     continue
             elif menu_load_rect.collidepoint(event.pos):
@@ -247,22 +292,41 @@ while running:
         if event.type == pygame.MOUSEBUTTONDOWN and game_state == "load_menu":
 
             if back_button_rect.collidepoint(event.pos):
+                paused = False
                 game_state = "menu"
 
+            elif delete_button_rect.collidepoint(event.pos):
+                delete_mode = not delete_mode
+
             elif slot1_rect.collidepoint(event.pos):
-                if os.path.exists(SAVE_FILES[0]):
-                    load_world(0)
-                    game_state = "simulation"
+                if delete_mode:
+                    if os.path.exists(SAVE_FILES[0]):
+                        os.remove(SAVE_FILES[0])
+                else:
+                    if os.path.exists(SAVE_FILES[0]):
+                        load_world(0)
+                        paused = True
+                        game_state = "simulation"
 
             elif slot2_rect.collidepoint(event.pos):
-                if os.path.exists(SAVE_FILES[1]):
-                    load_world(1)
-                    game_state = "simulation"
+                if delete_mode:
+                    if os.path.exists(SAVE_FILES[1]):
+                        os.remove(SAVE_FILES[1])
+                else:
+                    if os.path.exists(SAVE_FILES[1]):
+                        load_world(1)
+                        paused = True
+                        game_state = "simulation"
 
             elif slot3_rect.collidepoint(event.pos):
-                if os.path.exists(SAVE_FILES[2]):
-                    load_world(2)
-                    game_state = "simulation"
+                if delete_mode:
+                    if os.path.exists(SAVE_FILES[2]):
+                        os.remove(SAVE_FILES[2])
+                else:
+                    if os.path.exists(SAVE_FILES[2]):
+                        load_world(2)
+                        paused = True
+                        game_state = "simulation"
 
         #adam game over click handling
         if event.type == pygame.MOUSEBUTTONDOWN and game_state == "adam_game_over":
@@ -272,6 +336,7 @@ while running:
                 foods.clear()
                 game_over = False
                 adam_initialized = False
+                paused = False
                 game_state = "menu"
 
         #new game menu click handling
@@ -289,13 +354,28 @@ while running:
                     notification_text = "World name already exists"
                     notification_timer = 3000
                 else:
+                    # Reset world state for a brand new game
+                    creatures.clear()
+                    foods.clear()
+
+                    day = 1
+                    adam_initialized = False
+                    game_over = False
+
+                    selected_creature = None
+
+                    # reset save slot tracking for new world
+                    current_save_slot = None
+
+                    paused = False
                     game_state = "simulation"
 
             if back_newgame_rect.collidepoint(event.pos):
                 game_state = "menu"
-        if event.type == pygame.MOUSEBUTTONDOWN:
+        if event.type == pygame.MOUSEBUTTONDOWN and game_state == "simulation":
             #save and exit button
             if save_exit_rect.collidepoint(event.pos) and game_state == "simulation":
+                paused = True
                 save_world()
                 game_state = "menu"
             #creature selection logic (only active in select mode)
@@ -316,6 +396,8 @@ while running:
                 speed_mode = "normal"
             elif fast_button_rect.collidepoint(event.pos):
                 speed_mode = "fast"
+            elif pause_button_rect.collidepoint(event.pos):
+                paused = not paused
             elif kill_button_rect.collidepoint(event.pos):
                 mode = "kill"
             elif food_button_rect.collidepoint(event.pos):
@@ -377,7 +459,7 @@ while running:
         if event.type == pygame.KEYDOWN and game_state == "new_game" and name_input_active:
             if event.key == pygame.K_BACKSPACE:
                 world_name = world_name[:-1]
-            elif len(world_name) < 20:
+            elif len(world_name) < 10:
                 world_name += event.unicode
 
     #================ MODE SELECT MENU =================
@@ -441,10 +523,20 @@ while running:
         screen.blit(label, (300, 230))
 
         pygame.draw.rect(screen, (255,255,255), name_input_rect)
-        pygame.draw.rect(screen, (0,0,0), name_input_rect, 2)
+
+        #border changes color when active
+        border_color = (60,60,60) if name_input_active else (0,0,0)
+        pygame.draw.rect(screen, border_color, name_input_rect, 2)
 
         name_surface = font.render(world_name, True, (0,0,0))
         screen.blit(name_surface, (name_input_rect.x + 8, name_input_rect.y + 10))
+
+        #blinking caret (text cursor)
+        if name_input_active:
+            if (pygame.time.get_ticks() // 500) % 2 == 0:
+                caret_x = name_input_rect.x + 8 + name_surface.get_width() + 2
+                caret_y = name_input_rect.y + 8
+                pygame.draw.line(screen, (120,120,120), (caret_x, caret_y), (caret_x, caret_y + 22), 2)
 
         pygame.draw.rect(screen, (200,200,200), start_game_rect)
         pygame.draw.rect(screen, (180,180,180), back_newgame_rect)
@@ -471,27 +563,59 @@ while running:
 
         pygame.draw.rect(screen, (180,180,180), back_button_rect)
 
+        if delete_mode:
+            pygame.draw.rect(screen, (180,60,60), delete_button_rect)
+        else:
+            pygame.draw.rect(screen, (200,200,200), delete_button_rect)
+
         def get_slot_label(i):
             file = SAVE_FILES[i]
             if not os.path.exists(file):
-                return "Empty"
+                return ("Empty", "")
+
             try:
                 with open(file, "r") as f:
                     data = json.load(f)
-                    return data.get("world_name", "Saved World")
-            except:
-                return "Saved"
 
-        slot1_text = font.render(get_slot_label(0), True, (0,0,0))
-        slot2_text = font.render(get_slot_label(1), True, (0,0,0))
-        slot3_text = font.render(get_slot_label(2), True, (0,0,0))
+                name = data.get("world_name", "Saved World")
+                mode = data.get("game_mode", "free")
+
+                if mode == "adam":
+                    mode_text = "Adam Mode"
+                else:
+                    mode_text = "Free Play"
+
+                return (name[:10], mode_text)
+            except:
+                return ("Saved", "")
+
+        name1, mode1 = get_slot_label(0)
+        name2, mode2 = get_slot_label(1)
+        name3, mode3 = get_slot_label(2)
+
+        slot1_text = font.render(name1, True, (0,0,0))
+        slot2_text = font.render(name2, True, (0,0,0))
+        slot3_text = font.render(name3, True, (0,0,0))
+
+        slot1_mode = font.render(mode1, True, (80,80,80))
+        slot2_mode = font.render(mode2, True, (80,80,80))
+        slot3_mode = font.render(mode3, True, (80,80,80))
+
         back_text = font.render("Back", True, (0,0,0))
 
-        screen.blit(slot1_text, (slot1_rect.x + 60, slot1_rect.y + 15))
-        screen.blit(slot2_text, (slot2_rect.x + 60, slot2_rect.y + 15))
-        screen.blit(slot3_text, (slot3_rect.x + 60, slot3_rect.y + 15))
+        screen.blit(slot1_text, (slot1_rect.x + 60, slot1_rect.y + 8))
+        screen.blit(slot1_mode, (slot1_rect.x + 60, slot1_rect.y + 28))
+
+        screen.blit(slot2_text, (slot2_rect.x + 60, slot2_rect.y + 8))
+        screen.blit(slot2_mode, (slot2_rect.x + 60, slot2_rect.y + 28))
+
+        screen.blit(slot3_text, (slot3_rect.x + 60, slot3_rect.y + 8))
+        screen.blit(slot3_mode, (slot3_rect.x + 60, slot3_rect.y + 28))
 
         screen.blit(back_text, (back_button_rect.x + 45, back_button_rect.y + 10))
+
+        delete_text = font.render("Delete", True, (255,255,255) if delete_mode else (0,0,0))
+        screen.blit(delete_text, (delete_button_rect.x + 25, delete_button_rect.y + 10))
 
         pygame.display.flip()
         continue
@@ -522,7 +646,7 @@ while running:
     #allows holding mouse button to place multiple objects while dragging
     mouse_buttons = pygame.mouse.get_pressed()
 
-    if mouse_buttons[0]:  # left mouse button held
+    if game_state == "simulation" and mouse_buttons[0]:  # left mouse button held
         #prevent action when hovering over UI buttons
         if not (
             slow_button_rect.collidepoint(mouse_pos) or
@@ -558,31 +682,22 @@ while running:
     speed_scale = step_interval / 50  # 50 is normal reference
     effective_day_length = base_day_length * speed_scale
 
-    day_timer += dt
-    if day_timer >= effective_day_length:
-        day += 1
-        day_timer = 0
+    if game_state == "simulation" and not paused:
+        day_timer += dt
+        if day_timer >= effective_day_length:
+            day += 1
+            day_timer = 0
 
+            #reset daily auto-feed counter
+            food_spawned_today = 0
 
-        #reset daily auto-feed counter
-        food_spawned_today = 0
-
-        #spawn food for the new day according to level
-        if autofeed:
-            for _ in range(autofeed_level):
-                x = random.randint(0, 800)
-                y = random.randint(0, 600)
-                foods.append(Food((x, y)))
-            food_spawned_today = autofeed_level
-
-    #ensure autofeed respects daily quota if toggled mid-day
-    if autofeed and food_spawned_today < autofeed_level:
-        remaining = autofeed_level - food_spawned_today
-        for _ in range(remaining):
-            x = random.randint(0, 800)
-            y = random.randint(0, 600)
-            foods.append(Food((x, y)))
-        food_spawned_today = autofeed_level
+            #spawn food for the new day according to level
+            if autofeed:
+                for _ in range(autofeed_level):
+                    x = random.randint(0, 800)
+                    y = random.randint(0, 600)
+                    foods.append(Food((x, y)))
+                food_spawned_today = autofeed_level
 
     #update the game logic
     #draw everything
@@ -604,7 +719,7 @@ while running:
         ):
             pygame.draw.circle(screen, (200, 0, 0), mouse_pos, 50, 2)
 
-    if step_timer >= step_interval:
+    if not paused and step_timer >= step_interval:
         new_creatures = []
 
         for creature in creatures:
@@ -660,17 +775,18 @@ while running:
         active_panel = panel_rect.copy()
 
         if hasattr(selected_creature, "adam_line") and selected_creature.adam_line:
-            active_panel.height += 20
-            active_panel.y -= 2
+            #expand panel for Adam lineage header
+            active_panel.height += 40
+            active_panel.y -= 30
 
         pygame.draw.rect(screen, (220, 220, 220), active_panel)
         pygame.draw.rect(screen, (0, 0, 0), active_panel, 2)
 
         #close button
-        close_rect = pygame.Rect(active_panel.right - 25, active_panel.y + 5, 20, 20)
-        pygame.draw.rect(screen, (180, 50, 50), close_rect)
+        close_button_rect = pygame.Rect(active_panel.right - 25, active_panel.y + 5, 20, 20)
+        pygame.draw.rect(screen, (180, 50, 50), close_button_rect)
         x_text = font.render("X", True, (255,255,255))
-        screen.blit(x_text, (close_rect.x + 5, close_rect.y + 2))
+        screen.blit(x_text, (close_button_rect.x + 5, close_button_rect.y + 2))
 
         # Adam lineage header
         header_offset = 0
@@ -686,7 +802,7 @@ while running:
             screen.blit(header_text, (active_panel.x + 28, active_panel.y + 8))
             #draw red blood drop indicator
             pygame.draw.circle(screen, (180,0,0), (active_panel.x + 15, active_panel.y + 16), 5)
-            header_offset = 20
+            header_offset = 30
 
         #stat lines
         age_days = selected_creature.get_age_days(day)
@@ -736,6 +852,15 @@ while running:
 
             #draw filled portion
             pygame.draw.rect(screen, bar_color, (bar_x, bar_y, int(bar_width * hunger_ratio), bar_height))
+
+    # Pause button
+    if paused:
+        pygame.draw.rect(screen, (120,40,40), pause_button_rect)
+        pause_text = font.render("Paused", True, (255,255,255))
+    else:
+        pygame.draw.rect(screen, (200,200,200), pause_button_rect)
+        pause_text = font.render("Pause", True, (0,0,0))
+    screen.blit(pause_text, (pause_button_rect.x + 15, pause_button_rect.y + 5))
 
     #speed buttons
     if speed_mode == "slow":
