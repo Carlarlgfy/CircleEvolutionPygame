@@ -957,6 +957,16 @@ while running:
         screen.blit(note_text, (popup_rect.x + 10, popup_rect.y + 10))
 
     #updating screen
+    if paused and game_state == "simulation":
+        overlay = pygame.Surface((820, 620))
+        overlay.set_alpha(100)
+        overlay.fill((0, 0, 0))
+        screen.blit(overlay, (0, 0))
+
+        big_font = pygame.font.SysFont(None, 72)
+        pause_text = big_font.render("PAUSED", True, (255, 255, 255))
+        screen.blit(pause_text, (310, 260))
+
     pygame.display.flip()
 
 #quit pygame
