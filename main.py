@@ -114,6 +114,9 @@ name_input_active = False
 game_mode = None  # "adam" or "free"
 adam_initialized = False
 game_over = False
+manual_food_used = False
+game_won = False
+clean_days = 0
 
 #notification popup system
 notification_text = ""
@@ -267,6 +270,7 @@ while running:
                     notification_timer = 3000
                 else:
                     current_save_slot = None  # ensure a new world does not reuse an old save slot
+                    clean_days = 0
                     game_state = "mode_select"
                     continue
             elif menu_load_rect.collidepoint(event.pos):
@@ -334,8 +338,19 @@ while running:
             if back_button_rect.collidepoint(event.pos):
                 creatures.clear()
                 foods.clear()
+
                 game_over = False
+                game_won = False
+
                 adam_initialized = False
+                manual_food_used = False
+                clean_days = 0
+
+                day = 1
+                selected_creature = None
+
+                current_save_slot = None
+
                 paused = False
                 game_state = "menu"
 
@@ -366,6 +381,13 @@ while running:
 
                     # reset save slot tracking for new world
                     current_save_slot = None
+
+                    # Reset runtime state for new game
+                    manual_food_used = False
+                    game_won = False
+                    clean_days = 0
+                    autofeed = False
+                    autofeed_level = 5
 
                     paused = False
                     game_state = "simulation"
@@ -427,6 +449,8 @@ while running:
             else:
                 if mode == "food":
                     foods.append(Food(event.pos))
+                    manual_food_used = True
+                    clean_days = 0
                 elif mode == "creature":
                     new_creature = Creature(event.pos)
                     new_creature.birth_day = day
@@ -627,12 +651,17 @@ while running:
 
         big_font = pygame.font.SysFont(None,60)
 
-        line1 = big_font.render("Adam and Adam's descendants",True,(0,0,0))
-        line2 = big_font.render("have died.",True,(0,0,0))
-        line3 = big_font.render("GAME OVER",True,(0,0,0))
+        if game_won:
+            line1 = big_font.render("ADAM LINE SURVIVED",True,(0,0,0))
+            line2 = big_font.render("25 DAYS COMPLETED",True,(0,0,0))
+            line3 = big_font.render("YOU WIN",True,(0,120,0))
+        else:
+            line1 = big_font.render("Adam and Adam's descendants",True,(0,0,0))
+            line2 = big_font.render("have died.",True,(0,0,0))
+            line3 = big_font.render("GAME OVER",True,(0,0,0))
 
         screen.blit(line1,(180,200))
-        screen.blit(line2,(340,270))
+        screen.blit(line2,(300,270))
         screen.blit(line3,(320,340))
 
         pygame.draw.rect(screen,(200,200,200),back_button_rect)
@@ -660,6 +689,8 @@ while running:
             #continuous food placement
             if mode == "food":
                 foods.append(Food(mouse_pos))
+                manual_food_used = True
+                clean_days = 0
 
             #continuous kill while dragging
             elif mode == "kill":
@@ -687,6 +718,8 @@ while running:
         if day_timer >= effective_day_length:
             day += 1
             day_timer = 0
+
+            clean_days += 1
 
             #reset daily auto-feed counter
             food_spawned_today = 0
@@ -742,6 +775,15 @@ while running:
                 game_over = True
                 game_state = "adam_game_over"
 
+        # Adam mode win condition (25 clean days, Adam lineage alive)
+        if game_mode == "adam" and adam_initialized and not game_over:
+            if clean_days >= 25:
+                adam_alive = any(c.adam_line and c.alive for c in creatures)
+                if adam_alive:
+                    game_won = True
+                    game_over = True
+                    game_state = "adam_game_over"
+
         step_timer = 0
 
     for creature in creatures:
@@ -757,6 +799,10 @@ while running:
     #day counter display (top left)
     day_text = font.render(f"Day {day}", True, (0, 0, 0))
     screen.blit(day_text, (20, 20))
+    # Clean days display for Adam mode only
+    if game_mode == "adam":
+        clean_text = font.render(f"Clean: {clean_days}", True, (180,140,0))
+        screen.blit(clean_text, (140, 20))
 
     creature_count_text = font.render(f"# of creatures: {len(creatures)}", True, (0, 0, 0))
     screen.blit(creature_count_text, (20, 45))
