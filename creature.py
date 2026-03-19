@@ -81,6 +81,7 @@ class Creature:
         self.alive = True
         self.mature = False
         self.reproduction_cooldown = 0
+        self.has_reproduced = False
 
         #reproductive drive system
         #when low hunger and well fed, creature enters mating pursuit mode
@@ -194,6 +195,8 @@ class Creature:
 
                 if distance < 30:
                     child = self.reproduce(other)
+                    self.has_reproduced = True
+                    other.has_reproduced = True
 
                     #apply reproduction metabolic cost
                     #larger creatures pay higher energy cost

@@ -55,7 +55,7 @@ from creature import Creature
 creatures = []
 
 selected_creature = None
-panel_rect = pygame.Rect(10, 440, 250, 160)
+panel_rect = pygame.Rect(10, 380, 240, 180)
 close_button_rect = pygame.Rect(panel_rect.right - 25, panel_rect.y + 5, 20, 20)
 
 mode = "food"
@@ -192,7 +192,8 @@ def save_world():
                 },
                 "generation": getattr(c, "generation", 1),
                 "is_adam": getattr(c, "is_adam", False),
-                "birth_day": getattr(c, "birth_day", 1)
+                "birth_day": getattr(c, "birth_day", 1),
+                "has_reproduced": getattr(c, "has_reproduced", False)
             }
             for c in creatures
         ],
@@ -239,6 +240,7 @@ def load_world(slot_index):
         creature.generation = c.get("generation", 1)
         creature.is_adam = c.get("is_adam", False)
         creature.birth_day = c.get("birth_day", day)
+        creature.has_reproduced = c.get("has_reproduced", False)
         # restore current growth stage
         if "size" in c:
             creature.size = c["size"]
@@ -789,10 +791,15 @@ while running:
     for creature in creatures:
         creature.draw(screen)
 
-    #highlight selected creature
+    #highlight selected creature (halo only)
     if selected_creature and selected_creature in creatures:
-        pygame.draw.circle(screen, (255, 0, 0), (int(selected_creature.x), int(selected_creature.y)), selected_creature.size + 6, 2)
-        pygame.draw.circle(screen, (255, 255, 0), (int(selected_creature.x), int(selected_creature.y)), selected_creature.size + 10, 2)
+        pygame.draw.circle(
+            screen,
+            (0, 0, 0),
+            (int(selected_creature.x), int(selected_creature.y)),
+            int(selected_creature.size) + 6,
+            2
+        )
 
     #================ UI LAYER (drawn last so it appears on top) ================
 
@@ -817,88 +824,145 @@ while running:
     #selected creature info panel
     if selected_creature and selected_creature in creatures:
 
-        #create a working panel rectangle so we can modify size for Adam lineage
-        active_panel = panel_rect.copy()
+        def draw_normal_panel(creature):
+            panel = pygame.Rect(10, 360, 240, 210)
 
-        if hasattr(selected_creature, "adam_line") and selected_creature.adam_line:
-            #expand panel for Adam lineage header
-            active_panel.height += 40
-            active_panel.y -= 30
+            pygame.draw.rect(screen, (220, 220, 220), panel)
+            pygame.draw.rect(screen, (0, 0, 0), panel, 2)
 
-        pygame.draw.rect(screen, (220, 220, 220), active_panel)
-        pygame.draw.rect(screen, (0, 0, 0), active_panel, 2)
+            close_rect = pygame.Rect(panel.right - 25, panel.y + 5, 20, 20)
+            global close_button_rect
+            close_button_rect = close_rect
+            pygame.draw.rect(screen, (180, 50, 50), close_rect)
+            x_text = font.render("X", True, (255,255,255))
+            screen.blit(x_text, (close_rect.x + 5, close_rect.y + 2))
 
-        #close button
-        close_button_rect = pygame.Rect(active_panel.right - 25, active_panel.y + 5, 20, 20)
-        pygame.draw.rect(screen, (180, 50, 50), close_button_rect)
-        x_text = font.render("X", True, (255,255,255))
-        screen.blit(x_text, (close_button_rect.x + 5, close_button_rect.y + 2))
+            age_days = creature.get_age_days(day)
+            bred_status = "Yes" if getattr(creature, "has_reproduced", False) else "No"
 
-        # Adam lineage header
-        header_offset = 0
+            stats = [
+                f"Size: {round(creature.mature_size,1)}",
+                f"Generation: {creature.generation}",
+                f"Speed: {round(creature.speed,2)}",
+                f"Awareness: {round(creature.awareness_radius,1)}",
+                f"Maturation: {creature.maturation_time}",
+                f"Age (days): {age_days}",
+                f"Reproduced: {bred_status}"
+            ]
 
-        if hasattr(selected_creature, "adam_line") and selected_creature.adam_line:
+            for i, line in enumerate(stats):
+                stat_text = font.render(line, True, (0,0,0))
+                screen.blit(stat_text, (panel.x + 10, panel.y + 12 + i * 20))
 
-            #only the first initialized creature is Adam
-            if hasattr(selected_creature, "is_adam") and selected_creature.is_adam:
+            # hunger bar
+            bar_x = panel.x + 80
+            bar_y = panel.y + panel.height - 25
+            bar_width = 120
+            bar_height = 12
+
+            hunger_label = font.render("Hunger", True, (0,0,0))
+            screen.blit(hunger_label, (panel.x + 10, bar_y - 2))
+
+            # background
+            pygame.draw.rect(screen, (180,180,180), (bar_x, bar_y, bar_width, bar_height))
+
+            # satiated check
+            if hasattr(creature, "satiated_timer") and creature.satiated_timer > 0:
+                pygame.draw.rect(screen, (20,70,180), (bar_x, bar_y, bar_width, bar_height))
+
+                small_font = pygame.font.SysFont(None, 18)
+                satiated_text = small_font.render("SATIATED", True, (255,255,255))
+                text_rect = satiated_text.get_rect(center=(bar_x + bar_width/2, bar_y + bar_height/2))
+                screen.blit(satiated_text, text_rect)
+            else:
+                hunger_limit = max(getattr(creature, "hunger_limit", 100), 1)
+                hunger_ratio = min(max(creature.food_need / hunger_limit, 0), 1)
+
+                r = int(255 * hunger_ratio)
+                g = int(255 * (1 - hunger_ratio))
+
+                pygame.draw.rect(
+                    screen,
+                    (r, g, 0),
+                    (bar_x, bar_y, int(bar_width * hunger_ratio), bar_height)
+                )
+
+        def draw_adam_panel(creature):
+            panel = pygame.Rect(10, 340, 240, 210)
+
+            pygame.draw.rect(screen, (220, 220, 220), panel)
+            pygame.draw.rect(screen, (0, 0, 0), panel, 2)
+
+            close_rect = pygame.Rect(panel.right - 25, panel.y + 5, 20, 20)
+            global close_button_rect
+            close_button_rect = close_rect
+            pygame.draw.rect(screen, (180, 50, 50), close_rect)
+            x_text = font.render("X", True, (255,255,255))
+            screen.blit(x_text, (close_rect.x + 5, close_rect.y + 2))
+
+            if getattr(creature, "is_adam", False):
                 label = "ADAM"
             else:
                 label = "Descendant of Adam"
+
             header_text = font.render(label, True, (0,0,0))
-            screen.blit(header_text, (active_panel.x + 28, active_panel.y + 8))
-            #draw red blood drop indicator
-            pygame.draw.circle(screen, (180,0,0), (active_panel.x + 15, active_panel.y + 16), 5)
-            header_offset = 30
+            screen.blit(header_text, (panel.x + 28, panel.y + 8))
+            pygame.draw.circle(screen, (180,0,0), (panel.x + 15, panel.y + 16), 5)
 
-        #stat lines
-        age_days = selected_creature.get_age_days(day)
+            age_days = creature.get_age_days(day)
+            bred_status = "Yes" if getattr(creature, "has_reproduced", False) else "No"
 
-        stats = [
-            f"Size: {round(selected_creature.mature_size,1)}",
-            f"Generation: {selected_creature.generation}",
-            f"Speed: {round(selected_creature.speed,2)}",
-            f"Awareness: {round(selected_creature.awareness_radius,1)}",
-            f"Maturation: {selected_creature.maturation_time}",
-            f"Age (days): {age_days}"
-        ]
+            stats = [
+                f"Size: {round(creature.mature_size,1)}",
+                f"Generation: {creature.generation}",
+                f"Speed: {round(creature.speed,2)}",
+                f"Awareness: {round(creature.awareness_radius,1)}",
+                f"Maturation: {creature.maturation_time}",
+                f"Age (days): {age_days}",
+                f"Reproduced: {bred_status}"
+            ]
 
-        for i, line in enumerate(stats):
-            stat_text = font.render(line, True, (0,0,0))
-            screen.blit(stat_text, (active_panel.x + 10, active_panel.y + 10 + header_offset + i*18))
+            for i, line in enumerate(stats):
+                stat_text = font.render(line, True, (0,0,0))
+                screen.blit(stat_text, (panel.x + 10, panel.y + 45 + i * 20))
 
-        #hunger bar visualization
-        bar_x = active_panel.x + 80
-        bar_y = active_panel.y + active_panel.height - 25
-        bar_width = 120
-        bar_height = 12
+            # hunger bar
+            bar_x = panel.x + 80
+            bar_y = panel.y + panel.height - 25
+            bar_width = 120
+            bar_height = 12
 
-        hunger_label = font.render("Hunger", True, (0,0,0))
-        screen.blit(hunger_label, (active_panel.x + 10, bar_y - 2))
+            hunger_label = font.render("Hunger", True, (0,0,0))
+            screen.blit(hunger_label, (panel.x + 10, bar_y - 2))
 
-        #draw background bar
-        pygame.draw.rect(screen, (180,180,180), (bar_x, bar_y, bar_width, bar_height))
+            # background
+            pygame.draw.rect(screen, (180,180,180), (bar_x, bar_y, bar_width, bar_height))
 
-        #if creature is satiated show blue bar and SATIATED text
-        if hasattr(selected_creature, "satiated_timer") and selected_creature.satiated_timer > 0:
-            pygame.draw.rect(screen, (20,70,180), (bar_x, bar_y, bar_width, bar_height))
+            # satiated check
+            if hasattr(creature, "satiated_timer") and creature.satiated_timer > 0:
+                pygame.draw.rect(screen, (20,70,180), (bar_x, bar_y, bar_width, bar_height))
 
-            small_font = pygame.font.SysFont(None, 18)
-            satiated_text = small_font.render("SATIATED", True, (255,255,255))
-            text_rect = satiated_text.get_rect(center=(bar_x + bar_width/2, bar_y + bar_height/2))
-            screen.blit(satiated_text, text_rect)
+                small_font = pygame.font.SysFont(None, 18)
+                satiated_text = small_font.render("SATIATED", True, (255,255,255))
+                text_rect = satiated_text.get_rect(center=(bar_x + bar_width/2, bar_y + bar_height/2))
+                screen.blit(satiated_text, text_rect)
+            else:
+                hunger_limit = max(getattr(creature, "hunger_limit", 100), 1)
+                hunger_ratio = min(max(creature.food_need / hunger_limit, 0), 1)
 
+                r = int(255 * hunger_ratio)
+                g = int(255 * (1 - hunger_ratio))
+
+                pygame.draw.rect(
+                    screen,
+                    (r, g, 0),
+                    (bar_x, bar_y, int(bar_width * hunger_ratio), bar_height)
+                )
+
+        if getattr(selected_creature, "adam_line", False):
+            draw_adam_panel(selected_creature)
         else:
-            #scale hunger relative to creature-specific limit
-            limit = getattr(selected_creature, "hunger_limit", 200)
-            hunger_ratio = min(max(selected_creature.food_need / limit, 0), 1)
-
-            #calculate gradient color
-            r = int(255 * hunger_ratio)
-            g = int(255 * (1 - hunger_ratio))
-            bar_color = (r, g, 0)
-
-            #draw filled portion
-            pygame.draw.rect(screen, bar_color, (bar_x, bar_y, int(bar_width * hunger_ratio), bar_height))
+            draw_normal_panel(selected_creature)
 
     # Pause button
     if paused:
