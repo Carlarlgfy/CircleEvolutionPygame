@@ -888,8 +888,9 @@ while running:
             screen.blit(satiated_text, text_rect)
 
         else:
-            #0 = full, 200 = starvation
-            hunger_ratio = min(max(selected_creature.food_need / 200, 0), 1)
+            #scale hunger relative to creature-specific limit
+            limit = getattr(selected_creature, "hunger_limit", 200)
+            hunger_ratio = min(max(selected_creature.food_need / limit, 0), 1)
 
             #calculate gradient color
             r = int(255 * hunger_ratio)
