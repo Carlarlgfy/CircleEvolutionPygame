@@ -90,9 +90,11 @@ game_state = "menu"
 
 #menu buttons
 
-menu_new_rect = pygame.Rect(310, 220, 200, 50)
+# Swap positions of New Game and How to Play
+menu_new_rect = pygame.Rect(310, 360, 200, 50)
 menu_load_rect = pygame.Rect(310, 290, 200, 50)
-menu_quit_rect = pygame.Rect(310, 360, 200, 50)
+menu_info_rect = pygame.Rect(310, 220, 200, 50)
+menu_quit_rect = pygame.Rect(310, 440, 200, 50)
 
 #mode select buttons
 mode_select_adam_rect = pygame.Rect(300, 230, 220, 50)
@@ -275,10 +277,17 @@ while running:
                     clean_days = 0
                     game_state = "mode_select"
                     continue
+            elif menu_info_rect.collidepoint(event.pos):
+                game_state = "instructions"
+                continue
             elif menu_load_rect.collidepoint(event.pos):
                 game_state = "load_menu"
             elif menu_quit_rect.collidepoint(event.pos):
                 running = False
+
+        # Instructions screen click handling
+        if event.type == pygame.MOUSEBUTTONDOWN and game_state == "instructions":
+            game_state = "menu"
 
         #mode selection click handling
         if event.type == pygame.MOUSEBUTTONDOWN and game_state == "mode_select":
@@ -522,15 +531,51 @@ while running:
 
         pygame.draw.rect(screen, (200,200,200), menu_new_rect)
         pygame.draw.rect(screen, (200,200,200), menu_load_rect)
+        pygame.draw.rect(screen, (200,200,200), menu_info_rect)
         pygame.draw.rect(screen, (200,200,200), menu_quit_rect)
 
         new_text = font.render("New Game", True, (0,0,0))
         load_text = font.render("Load Game", True, (0,0,0))
+        info_text = font.render("How to Play", True, (0,0,0))
         quit_text = font.render("Quit", True, (0,0,0))
 
         screen.blit(new_text, (menu_new_rect.x + 55, menu_new_rect.y + 15))
         screen.blit(load_text, (menu_load_rect.x + 55, menu_load_rect.y + 15))
+        screen.blit(info_text, (menu_info_rect.x + 50, menu_info_rect.y + 15))
         screen.blit(quit_text, (menu_quit_rect.x + 80, menu_quit_rect.y + 15))
+
+        pygame.display.flip()
+        continue
+
+    #================ INSTRUCTIONS SCREEN =================
+    if game_state == "instructions":
+
+        screen.fill((255,255,255))
+
+        lines = [
+            "Welcome to the Circle Evolution Game. This game simulates the genetics",
+            "of organisms in a small environment. Each creature has 9 genetic traits:",
+            "mature_size, color, speed, awareness_radius, lifespan,",
+            "maturation_time, hunger_limit, energy, adam_line.",
+            "Each of these affect the creatures ability to survive.",
+            "",
+            "Some are cosmetic like color and adam_line, but they still affect how",
+            "the player views and interacts with creatures using food and kill tools.",
+            "",
+            "In freeplay you can create as many creatures as you want and experiment.",
+            "There are no win or lose conditions.",
+            "",
+            "In Adam mode you must keep the adam_line alive.",
+            "Win: survive 25 days without placing food.",
+            "Lose: adam_line goes extinct.",
+            "",
+            "The goal is to experiment with breeding and behavior.",
+            "I hope you enjoy."
+        ]
+
+        for i, line in enumerate(lines):
+            text = font.render(line, True, (0,0,0))
+            screen.blit(text, (40, 80 + i*25))
 
         pygame.display.flip()
         continue
